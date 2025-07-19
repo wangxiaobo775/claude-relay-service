@@ -1,6 +1,7 @@
 const express = require('express');
 const claudeRelayService = require('../services/claudeRelayService');
 const apiKeyService = require('../services/apiKeyService');
+const requestHistoryService = require('../services/requestHistoryService');
 const { authenticateApiKey } = require('../middleware/auth');
 const logger = require('../utils/logger');
 
@@ -8,6 +9,8 @@ const router = express.Router();
 
 // 🚀 Claude API messages 端点
 router.post('/v1/messages', authenticateApiKey, async (req, res) => {
+  let requestId = null;
+  
   try {
     const startTime = Date.now();
     
@@ -38,6 +41,15 @@ router.post('/v1/messages', authenticateApiKey, async (req, res) => {
     
     logger.api(`🚀 Processing ${isStream ? 'stream' : 'non-stream'} request for key: ${req.apiKey.name}`);
 
+    // 🔄 开始记录请求历史
+    requestId = await requestHistoryService.startRequest({
+      apiKeyId: req.apiKey.id,
+      apiKeyName: req.apiKey.name,
+      model: req.body.model,
+      requestBody: req.body,
+      headers: req.headers
+    });
+
     if (isStream) {
       // 流式响应 - 只使用官方真实usage数据
       res.setHeader('Content-Type', 'text/event-stream');
@@ -66,6 +78,18 @@ router.post('/v1/messages', authenticateApiKey, async (req, res) => {
             logger.error('❌ Failed to record stream usage:', error);
           });
           
+          // 🔄 完成请求历史记录
+          requestHistoryService.completeRequest(requestId, {
+            statusCode: 200,
+            inputTokens,
+            outputTokens,
+            cacheCreateTokens,
+            cacheReadTokens,
+            responseBody: { type: 'stream', message: 'Stream response completed' }
+          }).catch(error => {
+            logger.error('❌ Failed to complete request history:', error);
+          });
+          
           usageDataCaptured = true;
           logger.api(`📊 Stream usage recorded (real) - Model: ${model}, Input: ${inputTokens}, Output: ${outputTokens}, Cache Create: ${cacheCreateTokens}, Cache Read: ${cacheReadTokens}, Total: ${inputTokens + outputTokens + cacheCreateTokens + cacheReadTokens} tokens`);
         } else {
@@ -77,6 +101,13 @@ router.post('/v1/messages', authenticateApiKey, async (req, res) => {
       setTimeout(() => {
         if (!usageDataCaptured) {
           logger.warn('⚠️ No usage data captured from SSE stream - no statistics recorded (official data only)');
+          // 🔄 标记请求为失败（没有usage数据）
+          requestHistoryService.failRequest(requestId, {
+            error: 'No usage data captured from stream',
+            statusCode: 200
+          }).catch(error => {
+            logger.error('❌ Failed to fail request history:', error);
+          });
         }
       }, 1000); // 1秒后检查
     } else {
@@ -122,16 +153,38 @@ router.post('/v1/messages', authenticateApiKey, async (req, res) => {
           // 记录真实的token使用量（包含模型信息和所有4种token）
           await apiKeyService.recordUsage(req.apiKey.id, inputTokens, outputTokens, cacheCreateTokens, cacheReadTokens, model);
           
+          // 🔄 完成请求历史记录
+          await requestHistoryService.completeRequest(requestId, {
+            statusCode: response.statusCode,
+            inputTokens,
+            outputTokens,
+            cacheCreateTokens,
+            cacheReadTokens,
+            responseBody: jsonData
+          });
+          
           usageRecorded = true;
           logger.api(`📊 Non-stream usage recorded (real) - Model: ${model}, Input: ${inputTokens}, Output: ${outputTokens}, Cache Create: ${cacheCreateTokens}, Cache Read: ${cacheReadTokens}, Total: ${inputTokens + outputTokens + cacheCreateTokens + cacheReadTokens} tokens`);
         } else {
           logger.warn('⚠️ No usage data found in Claude API JSON response');
+          // 🔄 标记请求为失败（没有usage数据）
+          await requestHistoryService.failRequest(requestId, {
+            error: 'No usage data in API response',
+            statusCode: response.statusCode
+          });
         }
         
         res.json(jsonData);
       } catch (parseError) {
         logger.warn('⚠️ Failed to parse Claude API response as JSON:', parseError.message);
         logger.info('📄 Raw response body:', response.body);
+        
+        // 🔄 标记请求为失败（JSON解析错误）
+        await requestHistoryService.failRequest(requestId, {
+          error: `JSON parse error: ${parseError.message}`,
+          statusCode: response.statusCode
+        });
+        
         res.send(response.body);
       }
       
@@ -149,6 +202,16 @@ router.post('/v1/messages', authenticateApiKey, async (req, res) => {
       code: error.code,
       stack: error.stack
     });
+    
+    // 🔄 标记请求为失败
+    if (requestId) {
+      await requestHistoryService.failRequest(requestId, {
+        error: error.message,
+        statusCode: 500
+      }).catch(historyError => {
+        logger.error('❌ Failed to record request failure:', historyError);
+      });
+    }
     
     // 确保在任何情况下都能返回有效的JSON响应
     if (!res.headersSent) {
@@ -246,6 +309,96 @@ router.get('/v1/usage', authenticateApiKey, async (req, res) => {
     logger.error('❌ Usage stats error:', error);
     res.status(500).json({
       error: 'Failed to get usage stats',
+      message: error.message
+    });
+  }
+});
+
+// 📊 请求历史端点（需要API Key认证）
+router.get('/v1/request-history', authenticateApiKey, async (req, res) => {
+  try {
+    const { 
+      date, 
+      limit = 50, 
+      offset = 0 
+    } = req.query;
+    
+    const options = {
+      apiKeyId: req.apiKey.id,
+      date,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    };
+    
+    const history = await requestHistoryService.getRequestHistory(options);
+    
+    res.json({
+      history,
+      pagination: {
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        hasMore: history.length === parseInt(limit)
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('❌ Request history error:', error);
+    res.status(500).json({
+      error: 'Failed to get request history',
+      message: error.message
+    });
+  }
+});
+
+// 📋 单个请求详情端点
+router.get('/v1/request-history/:requestId', authenticateApiKey, async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const requestDetails = await requestHistoryService.getRequestDetails(requestId);
+    
+    if (!requestDetails) {
+      return res.status(404).json({
+        error: 'Request not found',
+        message: 'The specified request ID was not found'
+      });
+    }
+    
+    // 检查请求是否属于当前API Key
+    if (requestDetails.apiKeyId !== req.apiKey.id) {
+      return res.status(403).json({
+        error: 'Access denied',
+        message: 'You can only view your own requests'
+      });
+    }
+    
+    res.json({
+      request: requestDetails,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('❌ Request details error:', error);
+    res.status(500).json({
+      error: 'Failed to get request details',
+      message: error.message
+    });
+  }
+});
+
+// 📈 请求历史统计端点
+router.get('/v1/request-stats', authenticateApiKey, async (req, res) => {
+  try {
+    const { date } = req.query;
+    const stats = await requestHistoryService.getRequestStats(date);
+    
+    res.json({
+      stats,
+      date: date || new Date().toISOString().split('T')[0],
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('❌ Request stats error:', error);
+    res.status(500).json({
+      error: 'Failed to get request statistics',
       message: error.message
     });
   }

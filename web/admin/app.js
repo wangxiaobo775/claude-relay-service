@@ -24,6 +24,7 @@ const app = createApp({
                 { key: 'dashboard', name: '仪表板', icon: 'fas fa-tachometer-alt' },
                 { key: 'apiKeys', name: 'API Keys', icon: 'fas fa-key' },
                 { key: 'accounts', name: 'Claude账户', icon: 'fas fa-user-circle' },
+                { key: 'requestHistory', name: '请求历史', icon: 'fas fa-history' },
                 { key: 'tutorial', name: '使用教程', icon: 'fas fa-graduation-cap' }
             ],
             
@@ -111,6 +112,39 @@ const app = createApp({
             apiKeys: [],
             apiKeysLoading: false,
             showCreateApiKeyModal: false,
+            
+            // 请求历史
+            requestHistory: [],
+            requestHistoryLoading: false,
+            requestHistoryPagination: {
+                limit: 50,
+                offset: 0,
+                hasMore: false
+            },
+            requestHistoryFilters: {
+                apiKeyId: '',
+                model: '',
+                status: '',
+                date: ''
+            },
+            requestHistoryStats: {
+                totalRequests: 0,
+                successRequests: 0,
+                failedRequests: 0,
+                totalTokens: 0,
+                avgDuration: 0,
+                modelStats: {},
+                statusStats: {}
+            },
+            showRequestDetailsModal: false,
+            selectedRequest: null,
+            availableModels: [],
+            availableStatuses: [
+                { value: '', label: '全部状态' },
+                { value: 'success', label: '成功' },
+                { value: 'error', label: '失败' },
+                { value: 'pending', label: '进行中' }
+            ],
             createApiKeyLoading: false,
             apiKeyForm: {
                 name: '',
@@ -779,6 +813,10 @@ const app = createApp({
                         this.loadUsageTrend();
                         this.loadApiKeysUsageTrend();
                     });
+                    break;
+                case 'requestHistory':
+                    this.loadRequestHistory(true);
+                    this.loadRequestHistoryStats();
                     break;
                 case 'apiKeys':
                     // 加载API Keys时同时加载账号列表，以便显示绑定账号名称
@@ -2853,6 +2891,256 @@ const app = createApp({
             });
             
             this.showToast('已重置筛选条件并刷新数据', 'info', '重置成功');
+        },
+
+        // 请求历史相关方法
+        async loadRequestHistory(reset = false) {
+            if (reset) {
+                this.requestHistoryPagination.offset = 0;
+                this.requestHistory = [];
+            }
+
+            this.requestHistoryLoading = true;
+            try {
+                const params = new URLSearchParams({
+                    limit: this.requestHistoryPagination.limit,
+                    offset: this.requestHistoryPagination.offset
+                });
+
+                // 添加筛选条件
+                if (this.requestHistoryFilters.apiKeyId) {
+                    params.append('apiKeyId', this.requestHistoryFilters.apiKeyId);
+                }
+                if (this.requestHistoryFilters.model) {
+                    params.append('model', this.requestHistoryFilters.model);
+                }
+                if (this.requestHistoryFilters.status) {
+                    params.append('status', this.requestHistoryFilters.status);
+                }
+                if (this.requestHistoryFilters.date) {
+                    params.append('date', this.requestHistoryFilters.date);
+                }
+
+                const response = await fetch(`/admin/request-history?${params}`, {
+                    headers: {
+                        'Authorization': `Bearer ${this.authToken}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                if (reset) {
+                    this.requestHistory = data.data.history;
+                } else {
+                    this.requestHistory = [...this.requestHistory, ...data.data.history];
+                }
+                
+                this.requestHistoryPagination.hasMore = data.data.pagination.hasMore;
+                this.requestHistoryPagination.offset += data.data.history.length;
+
+                console.log('请求历史加载完成:', data.data.history.length, '条记录');
+            } catch (error) {
+                console.error('加载请求历史失败:', error);
+                this.showToast('加载请求历史失败', 'error');
+            } finally {
+                this.requestHistoryLoading = false;
+            }
+        },
+
+        async loadRequestHistoryStats() {
+            try {
+                const params = new URLSearchParams();
+                if (this.requestHistoryFilters.date) {
+                    params.append('date', this.requestHistoryFilters.date);
+                }
+
+                const response = await fetch(`/admin/request-stats?${params}`, {
+                    headers: {
+                        'Authorization': `Bearer ${this.authToken}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                this.requestHistoryStats = data.data.stats;
+
+                console.log('请求统计加载完成:', this.requestHistoryStats);
+            } catch (error) {
+                console.error('加载请求统计失败:', error);
+                this.showToast('加载请求统计失败', 'error');
+            }
+        },
+
+        async loadRequestDetails(requestId) {
+            try {
+                const response = await fetch(`/admin/request-history/${requestId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${this.authToken}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                this.selectedRequest = data.data;
+                this.showRequestDetailsModal = true;
+
+                console.log('请求详情加载完成:', this.selectedRequest);
+            } catch (error) {
+                console.error('加载请求详情失败:', error);
+                this.showToast('加载请求详情失败', 'error');
+            }
+        },
+
+        async deleteRequestHistory(requestId) {
+            try {
+                const response = await fetch(`/admin/request-history/${requestId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${this.authToken}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                this.showToast('请求记录删除成功', 'success');
+                this.loadRequestHistory(true);
+                this.loadRequestHistoryStats();
+                
+                // 如果删除的是当前查看的详情，关闭模态框
+                if (this.selectedRequest && this.selectedRequest.requestId === requestId) {
+                    this.showRequestDetailsModal = false;
+                    this.selectedRequest = null;
+                }
+            } catch (error) {
+                console.error('删除请求记录失败:', error);
+                this.showToast('删除请求记录失败', 'error');
+            }
+        },
+
+        applyRequestHistoryFilters() {
+            this.loadRequestHistory(true);
+            this.loadRequestHistoryStats();
+        },
+
+        resetRequestHistoryFilters() {
+            this.requestHistoryFilters = {
+                apiKeyId: '',
+                model: '',
+                status: '',
+                date: ''
+            };
+            this.loadRequestHistory(true);
+            this.loadRequestHistoryStats();
+        },
+
+        loadMoreRequestHistory() {
+            if (!this.requestHistoryLoading && this.requestHistoryPagination.hasMore) {
+                this.loadRequestHistory();
+            }
+        },
+
+        formatDuration(duration) {
+            if (!duration) return '-';
+            const ms = parseInt(duration);
+            if (ms < 1000) return `${ms}ms`;
+            return `${(ms / 1000).toFixed(2)}s`;
+        },
+
+        formatTokens(tokens) {
+            if (!tokens && tokens !== 0) return '-';
+            return parseInt(tokens).toLocaleString();
+        },
+
+        getStatusBadgeType(status) {
+            switch (status) {
+                case 'success': return 'success';
+                case 'error': return 'danger';
+                case 'pending': return 'warning';
+                default: return 'info';
+            }
+        },
+
+        getStatusText(status) {
+            switch (status) {
+                case 'success': return '成功';
+                case 'error': return '失败';
+                case 'pending': return '进行中';
+                default: return status || '未知';
+            }
+        },
+
+        async exportRequestHistory() {
+            try {
+                const params = new URLSearchParams();
+                if (this.requestHistoryFilters.apiKeyId) {
+                    params.append('apiKeyId', this.requestHistoryFilters.apiKeyId);
+                }
+                if (this.requestHistoryFilters.model) {
+                    params.append('model', this.requestHistoryFilters.model);
+                }
+                if (this.requestHistoryFilters.status) {
+                    params.append('status', this.requestHistoryFilters.status);
+                }
+                if (this.requestHistoryFilters.date) {
+                    params.append('date', this.requestHistoryFilters.date);
+                }
+                params.append('limit', '1000'); // 导出限制
+
+                const response = await fetch(`/admin/request-history?${params}`, {
+                    headers: {
+                        'Authorization': `Bearer ${this.authToken}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                const history = data.data.history;
+
+                // 转换为CSV格式
+                const headers = ['请求ID', '时间戳', 'API Key', '模型', '状态', '持续时间(ms)', '输入Token', '输出Token', '总Token', '错误信息'];
+                const csvData = [
+                    headers.join(','),
+                    ...history.map(req => [
+                        req.requestId,
+                        req.timestamp,
+                        req.apiKeyName || req.apiKeyId,
+                        req.model || '-',
+                        this.getStatusText(req.status),
+                        req.duration || '-',
+                        req.inputTokens || 0,
+                        req.outputTokens || 0,
+                        req.totalTokens || 0,
+                        (req.error || '').replace(/,/g, ';') // 转义逗号
+                    ].join(','))
+                ].join('\n');
+
+                // 下载文件
+                const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `request_history_${new Date().toISOString().split('T')[0]}.csv`;
+                link.click();
+
+                this.showToast('请求历史导出成功', 'success');
+            } catch (error) {
+                console.error('导出请求历史失败:', error);
+                this.showToast('导出请求历史失败', 'error');
+            }
         }
     }
 });

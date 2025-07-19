@@ -987,6 +987,229 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- 请求历史 -->
+                <div v-if="activeTab === 'requestHistory'" class="tab-content">
+                    <!-- 统计卡片 -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        <div class="card p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="w-12 h-12 bg-blue-500/20 border border-blue-500/30 rounded-xl flex items-center justify-center">
+                                    <i class="fas fa-list-ul text-blue-600"></i>
+                                </div>
+                                <span class="text-2xl font-bold text-blue-600">{{ requestHistoryStats.totalRequests.toLocaleString() }}</span>
+                            </div>
+                            <h3 class="text-lg font-semibold text-gray-900 mb-1">总请求数</h3>
+                            <p class="text-gray-600 text-sm">所有API请求数量</p>
+                        </div>
+
+                        <div class="card p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="w-12 h-12 bg-green-500/20 border border-green-500/30 rounded-xl flex items-center justify-center">
+                                    <i class="fas fa-check-circle text-green-600"></i>
+                                </div>
+                                <span class="text-2xl font-bold text-green-600">{{ requestHistoryStats.successRequests.toLocaleString() }}</span>
+                            </div>
+                            <h3 class="text-lg font-semibold text-gray-900 mb-1">成功请求</h3>
+                            <p class="text-gray-600 text-sm">
+                                成功率 {{ requestHistoryStats.totalRequests > 0 ? Math.round((requestHistoryStats.successRequests / requestHistoryStats.totalRequests) * 100) : 0 }}%
+                            </p>
+                        </div>
+
+                        <div class="card p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="w-12 h-12 bg-red-500/20 border border-red-500/30 rounded-xl flex items-center justify-center">
+                                    <i class="fas fa-times-circle text-red-600"></i>
+                                </div>
+                                <span class="text-2xl font-bold text-red-600">{{ requestHistoryStats.failedRequests.toLocaleString() }}</span>
+                            </div>
+                            <h3 class="text-lg font-semibold text-gray-900 mb-1">失败请求</h3>
+                            <p class="text-gray-600 text-sm">
+                                失败率 {{ requestHistoryStats.totalRequests > 0 ? Math.round((requestHistoryStats.failedRequests / requestHistoryStats.totalRequests) * 100) : 0 }}%
+                            </p>
+                        </div>
+
+                        <div class="card p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="w-12 h-12 bg-purple-500/20 border border-purple-500/30 rounded-xl flex items-center justify-center">
+                                    <i class="fas fa-clock text-purple-600"></i>
+                                </div>
+                                <span class="text-2xl font-bold text-purple-600">{{ formatDuration(requestHistoryStats.avgDuration) }}</span>
+                            </div>
+                            <h3 class="text-lg font-semibold text-gray-900 mb-1">平均耗时</h3>
+                            <p class="text-gray-600 text-sm">请求平均响应时间</p>
+                        </div>
+                    </div>
+
+                    <!-- 筛选器和操作按钮 -->
+                    <div class="card p-6 mb-6">
+                        <div class="flex flex-col lg:flex-row gap-4 items-end">
+                            <div class="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <!-- API Key筛选 -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">API Key</label>
+                                    <select v-model="requestHistoryFilters.apiKeyId" class="form-select w-full">
+                                        <option value="">全部API Key</option>
+                                        <option v-for="key in apiKeys" :key="key.id" :value="key.id">
+                                            {{ key.name }} ({{ key.id.slice(0, 8) }}...)
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <!-- 模型筛选 -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">模型</label>
+                                    <select v-model="requestHistoryFilters.model" class="form-select w-full">
+                                        <option value="">全部模型</option>
+                                        <option v-for="(stats, model) in requestHistoryStats.modelStats" :key="model" :value="model">
+                                            {{ model }} ({{ stats.count }})
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <!-- 状态筛选 -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">状态</label>
+                                    <select v-model="requestHistoryFilters.status" class="form-select w-full">
+                                        <option v-for="status in availableStatuses" :key="status.value" :value="status.value">
+                                            {{ status.label }}
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <!-- 日期筛选 -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">日期</label>
+                                    <input 
+                                        v-model="requestHistoryFilters.date" 
+                                        type="date" 
+                                        class="form-input w-full"
+                                        :max="new Date().toISOString().split('T')[0]"
+                                    >
+                                </div>
+                            </div>
+
+                            <!-- 操作按钮 -->
+                            <div class="flex gap-2">
+                                <button @click="applyRequestHistoryFilters" class="btn btn-primary px-4 py-2">
+                                    <i class="fas fa-search mr-2"></i>筛选
+                                </button>
+                                <button @click="resetRequestHistoryFilters" class="btn btn-secondary px-4 py-2">
+                                    <i class="fas fa-undo mr-2"></i>重置
+                                </button>
+                                <button @click="exportRequestHistory" class="btn btn-info px-4 py-2">
+                                    <i class="fas fa-download mr-2"></i>导出
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 请求历史表格 -->
+                    <div class="card p-6">
+                        <div class="flex justify-between items-center mb-6">
+                            <div>
+                                <h3 class="text-xl font-bold text-gray-900 mb-2">请求历史记录</h3>
+                                <p class="text-gray-600">查看所有API请求的详细信息</p>
+                            </div>
+                        </div>
+
+                        <div v-if="requestHistoryLoading && requestHistory.length === 0" class="flex justify-center items-center py-12">
+                            <div class="loading-spinner mr-3"></div>
+                            <span class="text-gray-600">加载中...</span>
+                        </div>
+
+                        <div v-else-if="requestHistory.length === 0" class="text-center py-12">
+                            <i class="fas fa-inbox text-4xl text-gray-400 mb-4"></i>
+                            <p class="text-gray-600">暂无请求记录</p>
+                        </div>
+
+                        <div v-else class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead>
+                                    <tr class="border-b border-gray-200">
+                                        <th class="text-left py-3 px-4 font-semibold text-gray-700">时间</th>
+                                        <th class="text-left py-3 px-4 font-semibold text-gray-700">API Key</th>
+                                        <th class="text-left py-3 px-4 font-semibold text-gray-700">模型</th>
+                                        <th class="text-left py-3 px-4 font-semibold text-gray-700">状态</th>
+                                        <th class="text-left py-3 px-4 font-semibold text-gray-700">耗时</th>
+                                        <th class="text-left py-3 px-4 font-semibold text-gray-700">Token</th>
+                                        <th class="text-left py-3 px-4 font-semibold text-gray-700">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="request in requestHistory" :key="request.requestId" class="border-b border-gray-100 hover:bg-gray-50">
+                                        <td class="py-3 px-4 text-sm">
+                                            <div class="font-medium text-gray-900">
+                                                {{ new Date(request.timestamp).toLocaleString('zh-CN') }}
+                                            </div>
+                                        </td>
+                                        <td class="py-3 px-4 text-sm">
+                                            <div class="font-medium text-gray-900">{{ request.apiKeyName || 'Unknown' }}</div>
+                                            <div class="text-gray-500 text-xs">{{ request.apiKeyId.slice(0, 8) }}...</div>
+                                        </td>
+                                        <td class="py-3 px-4 text-sm">
+                                            <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                                                {{ request.model || 'Unknown' }}
+                                            </span>
+                                        </td>
+                                        <td class="py-3 px-4 text-sm">
+                                            <span class="px-2 py-1 rounded-full text-xs font-medium" :class="{
+                                                'bg-green-100 text-green-800': request.status === 'success',
+                                                'bg-red-100 text-red-800': request.status === 'error',
+                                                'bg-yellow-100 text-yellow-800': request.status === 'pending'
+                                            }">
+                                                {{ getStatusText(request.status) }}
+                                            </span>
+                                        </td>
+                                        <td class="py-3 px-4 text-sm font-mono">
+                                            {{ formatDuration(request.duration) }}
+                                        </td>
+                                        <td class="py-3 px-4 text-sm">
+                                            <div class="text-gray-900">
+                                                <span class="font-medium">{{ formatTokens(request.totalTokens) }}</span>
+                                            </div>
+                                            <div class="text-gray-500 text-xs">
+                                                输入: {{ formatTokens(request.inputTokens) }} | 输出: {{ formatTokens(request.outputTokens) }}
+                                            </div>
+                                        </td>
+                                        <td class="py-3 px-4 text-sm">
+                                            <div class="flex gap-2">
+                                                <button 
+                                                    @click="loadRequestDetails(request.requestId)" 
+                                                    class="text-blue-600 hover:text-blue-800"
+                                                    title="查看详情"
+                                                >
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                <button 
+                                                    @click="deleteRequestHistory(request.requestId)" 
+                                                    class="text-red-600 hover:text-red-800"
+                                                    title="删除记录"
+                                                >
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- 加载更多按钮 -->
+                        <div v-if="requestHistoryPagination.hasMore" class="mt-6 text-center">
+                            <button 
+                                @click="loadMoreRequestHistory" 
+                                :disabled="requestHistoryLoading"
+                                class="btn btn-secondary px-6 py-2"
+                            >
+                                <div v-if="requestHistoryLoading" class="loading-spinner mr-2"></div>
+                                <i v-else class="fas fa-chevron-down mr-2"></i>
+                                {{ requestHistoryLoading ? '加载中...' : '加载更多' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <div v-if="activeTab === 'tutorial'" class="tab-content">
                     <div class="card p-6">
                         <div class="mb-8">
@@ -2696,6 +2919,138 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <!-- 请求详情模态框 -->
+        <div v-if="showRequestDetailsModal" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" @click.self="showRequestDetailsModal = false">
+            <div class="bg-white rounded-3xl p-8 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-2xl font-bold text-gray-900">请求详情</h3>
+                    <button @click="showRequestDetailsModal = false" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+
+                <div v-if="selectedRequest" class="space-y-6">
+                    <!-- 基本信息 -->
+                    <div class="card p-6">
+                        <h4 class="text-lg font-semibold text-gray-900 mb-4">基本信息</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-500 mb-1">请求ID</label>
+                                <p class="text-sm font-mono text-gray-900">{{ selectedRequest.requestId }}</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-500 mb-1">时间戳</label>
+                                <p class="text-sm text-gray-900">{{ new Date(selectedRequest.timestamp).toLocaleString('zh-CN') }}</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-500 mb-1">API Key</label>
+                                <p class="text-sm text-gray-900">{{ selectedRequest.apiKeyName || 'Unknown' }}</p>
+                                <p class="text-xs text-gray-500">{{ selectedRequest.apiKeyId }}</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-500 mb-1">模型</label>
+                                <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                                    {{ selectedRequest.model || 'Unknown' }}
+                                </span>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-500 mb-1">状态</label>
+                                <span class="px-2 py-1 rounded-full text-xs font-medium" :class="{
+                                    'bg-green-100 text-green-800': selectedRequest.status === 'success',
+                                    'bg-red-100 text-red-800': selectedRequest.status === 'error',
+                                    'bg-yellow-100 text-yellow-800': selectedRequest.status === 'pending'
+                                }">
+                                    {{ getStatusText(selectedRequest.status) }}
+                                </span>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-500 mb-1">持续时间</label>
+                                <p class="text-sm font-mono text-gray-900">{{ formatDuration(selectedRequest.duration) }}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Token 使用统计 -->
+                    <div class="card p-6">
+                        <h4 class="text-lg font-semibold text-gray-900 mb-4">Token 使用统计</h4>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div class="text-center p-4 bg-blue-50 rounded-lg">
+                                <div class="text-2xl font-bold text-blue-600">{{ formatTokens(selectedRequest.inputTokens) }}</div>
+                                <div class="text-sm text-blue-700">输入Token</div>
+                            </div>
+                            <div class="text-center p-4 bg-green-50 rounded-lg">
+                                <div class="text-2xl font-bold text-green-600">{{ formatTokens(selectedRequest.outputTokens) }}</div>
+                                <div class="text-sm text-green-700">输出Token</div>
+                            </div>
+                            <div class="text-center p-4 bg-purple-50 rounded-lg">
+                                <div class="text-2xl font-bold text-purple-600">{{ formatTokens(selectedRequest.cacheCreateTokens) }}</div>
+                                <div class="text-sm text-purple-700">缓存创建Token</div>
+                            </div>
+                            <div class="text-center p-4 bg-orange-50 rounded-lg">
+                                <div class="text-2xl font-bold text-orange-600">{{ formatTokens(selectedRequest.cacheReadTokens) }}</div>
+                                <div class="text-sm text-orange-700">缓存读取Token</div>
+                            </div>
+                        </div>
+                        <div class="mt-4 text-center p-4 bg-gray-50 rounded-lg">
+                            <div class="text-3xl font-bold text-gray-900">{{ formatTokens(selectedRequest.totalTokens) }}</div>
+                            <div class="text-sm text-gray-600">总Token数</div>
+                        </div>
+                    </div>
+
+                    <!-- 错误信息 -->
+                    <div v-if="selectedRequest.error" class="card p-6">
+                        <h4 class="text-lg font-semibold text-gray-900 mb-4">错误信息</h4>
+                        <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                            <div class="flex items-start gap-3">
+                                <i class="fas fa-exclamation-triangle text-red-600 mt-1"></i>
+                                <div class="flex-1">
+                                    <p class="text-red-800 font-medium mb-1">请求失败</p>
+                                    <p class="text-red-700 text-sm">{{ selectedRequest.error }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 请求体 -->
+                    <div v-if="selectedRequest.requestBody" class="card p-6">
+                        <h4 class="text-lg font-semibold text-gray-900 mb-4">请求体</h4>
+                        <div class="bg-gray-50 rounded-lg p-4 overflow-x-auto">
+                            <pre class="text-sm text-gray-800 whitespace-pre-wrap">{{ JSON.stringify(selectedRequest.requestBody, null, 2) }}</pre>
+                        </div>
+                    </div>
+
+                    <!-- 响应体 -->
+                    <div v-if="selectedRequest.responseBody" class="card p-6">
+                        <h4 class="text-lg font-semibold text-gray-900 mb-4">响应体</h4>
+                        <div class="bg-gray-50 rounded-lg p-4 overflow-x-auto">
+                            <pre class="text-sm text-gray-800 whitespace-pre-wrap">{{ JSON.stringify(selectedRequest.responseBody, null, 2) }}</pre>
+                        </div>
+                    </div>
+
+                    <!-- 请求头 -->
+                    <div v-if="selectedRequest.headers" class="card p-6">
+                        <h4 class="text-lg font-semibold text-gray-900 mb-4">请求头</h4>
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <div v-for="(value, key) in selectedRequest.headers" :key="key" class="flex justify-between py-1 border-b border-gray-200 last:border-b-0">
+                                <span class="text-sm font-medium text-gray-600">{{ key }}:</span>
+                                <span class="text-sm text-gray-800 ml-4">{{ value }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 操作按钮 -->
+                    <div class="flex justify-end gap-3 pt-6 border-t">
+                        <button @click="showRequestDetailsModal = false" class="btn btn-secondary px-6 py-2">
+                            <i class="fas fa-times mr-2"></i>关闭
+                        </button>
+                        <button @click="deleteRequestHistory(selectedRequest.requestId)" class="btn btn-danger px-6 py-2">
+                            <i class="fas fa-trash mr-2"></i>删除
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
