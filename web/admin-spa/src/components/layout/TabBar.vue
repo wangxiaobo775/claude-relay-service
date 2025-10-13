@@ -70,6 +70,7 @@ const tabs = computed(() => {
   }
 
   baseTabs.push(
+    { key: 'requestHistory', name: '请求历史', shortName: '历史', icon: 'fas fa-history' },
     { key: 'tutorial', name: '使用教程', shortName: '教程', icon: 'fas fa-graduation-cap' },
     { key: 'settings', name: '系统设置', shortName: '设置', icon: 'fas fa-cogs' }
   )
