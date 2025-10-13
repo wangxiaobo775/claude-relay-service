@@ -451,7 +451,7 @@ async function viewDetails(requestId) {
   try {
     const response = await apiClient.get(`/admin/request-history/${requestId}`)
     if (response.success) {
-      selectedRequest.value = response.data.request
+      selectedRequest.value = response.data
     }
   } catch (error) {
     console.error('Failed to load request details:', error)
