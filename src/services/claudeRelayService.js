@@ -1567,6 +1567,24 @@ class ClaudeRelayService {
                     }
                   }
 
+                  // 收集 content_block_delta 事件中的文本内容
+                  if (
+                    data.type === 'content_block_delta' &&
+                    data.delta &&
+                    data.delta.type === 'text_delta' &&
+                    data.delta.text
+                  ) {
+                    if (
+                      requestOptions.textCollector &&
+                      Array.isArray(requestOptions.textCollector)
+                    ) {
+                      requestOptions.textCollector.push({
+                        type: 'text',
+                        text: data.delta.text
+                      })
+                    }
+                  }
+
                   // 检查是否有限流错误
                   if (
                     data.type === 'error' &&

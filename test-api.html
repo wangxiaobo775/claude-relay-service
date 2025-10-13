@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Request History API</title>
+</head>
+<body>
+    <h1>Test Request History API</h1>
+    <button onclick="testListAPI()">Test List API</button>
+    <button onclick="testDetailsAPI()">Test Details API</button>
+    <pre id="output"></pre>
+
+    <script>
+        const API_BASE = 'http://localhost:3000';
+        const AUTH_TOKEN = localStorage.getItem('authToken') || prompt('Enter auth token:');
+
+        async function testListAPI() {
+            try {
+                const response = await fetch(`${API_BASE}/admin/request-history?limit=10&offset=0&date=2025-10-13`, {
+                    headers: {
+                        'Authorization': `Bearer ${AUTH_TOKEN}`
+                    }
+                });
+                const data = await response.json();
+                document.getElementById('output').textContent = JSON.stringify(data, null, 2);
+
+                if (data.success && data.data.history && data.data.history.length > 0) {
+                    window.testRequestId = data.data.history[0].requestId;
+                    console.log('First request ID:', window.testRequestId);
+                }
+            } catch (error) {
+                document.getElementById('output').textContent = 'Error: ' + error.message;
+            }
+        }
+
+        async function testDetailsAPI() {
+            const requestId = window.testRequestId || prompt('Enter request ID:');
+            try {
+                const response = await fetch(`${API_BASE}/admin/request-history/${requestId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${AUTH_TOKEN}`
+                    }
+                });
+                const data = await response.json();
+                document.getElementById('output').textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('output').textContent = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

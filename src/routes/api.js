@@ -163,6 +163,9 @@ async function handleMessagesRequest(req, res) {
         throw error
       }
 
+      // 用于收集流式响应文本内容
+      const collectedTextBlocks = []
+
       // 根据账号类型选择对应的转发服务并调用
       if (accountType === 'claude-official') {
         // 官方Claude账号使用原有的转发服务（会自己选择账号）
@@ -237,7 +240,17 @@ async function handleMessagesRequest(req, res) {
                 'claude-stream'
               )
 
-              // 🔄 完成请求历史记录
+              // 🔄 完成请求历史记录 - 包含收集到的响应文本
+              const responseBody = {
+                type: 'stream_complete',
+                model,
+                role: 'assistant',
+                content:
+                  collectedTextBlocks.length > 0
+                    ? collectedTextBlocks
+                    : [{ type: 'text', text: '[No text content collected]' }]
+              }
+
               requestHistoryService
                 .completeRequest(requestId, {
                   statusCode: 200,
@@ -245,7 +258,7 @@ async function handleMessagesRequest(req, res) {
                   outputTokens,
                   cacheCreateTokens,
                   cacheReadTokens,
-                  responseBody: { type: 'stream', message: 'Stream response completed' }
+                  responseBody
                 })
                 .catch((error) => {
                   logger.error('❌ Failed to complete request history:', error)
@@ -253,7 +266,7 @@ async function handleMessagesRequest(req, res) {
 
               usageDataCaptured = true
               logger.api(
-                `📊 Stream usage recorded (real) - Model: ${model}, Input: ${inputTokens}, Output: ${outputTokens}, Cache Create: ${cacheCreateTokens}, Cache Read: ${cacheReadTokens}, Total: ${inputTokens + outputTokens + cacheCreateTokens + cacheReadTokens} tokens`
+                `📊 Stream usage recorded (real) - Model: ${model}, Input: ${inputTokens}, Output: ${outputTokens}, Cache Create: ${cacheCreateTokens}, Cache Read: ${cacheReadTokens}, Total: ${inputTokens + outputTokens + cacheCreateTokens + cacheReadTokens} tokens, Text blocks: ${collectedTextBlocks.length}`
               )
             } else {
               logger.warn(
@@ -261,6 +274,11 @@ async function handleMessagesRequest(req, res) {
                 JSON.stringify(usageData)
               )
             }
+          },
+          null, // streamTransformer
+          {
+            // 传递文本收集器给流式处理函数
+            textCollector: collectedTextBlocks
           }
         )
       } else if (accountType === 'claude-console') {
