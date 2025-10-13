@@ -372,7 +372,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import { apiClient } from '@/config/api'
 
 // 数据
 const loading = ref(false)
@@ -400,9 +400,9 @@ const hasMore = ref(false)
 // 加载 API Keys 列表
 async function loadApiKeys() {
   try {
-    const response = await axios.get('/admin/api-keys')
-    if (response.data.success) {
-      apiKeys.value = response.data.data.keys || []
+    const response = await apiClient.get('/admin/api-keys')
+    if (response.success) {
+      apiKeys.value = response.data.keys || []
     }
   } catch (error) {
     console.error('Failed to load API keys:', error)
@@ -428,12 +428,12 @@ async function loadHistory() {
       params.status = filters.value.status
     }
 
-    const response = await axios.get('/admin/request-history', { params })
+    const response = await apiClient.get('/admin/request-history', { params })
 
-    if (response.data.success) {
-      historyList.value = response.data.data.history || []
-      hasMore.value = response.data.data.pagination?.hasMore || false
-      pagination.value.total = response.data.data.pagination?.total || historyList.value.length
+    if (response.success) {
+      historyList.value = response.data.history || []
+      hasMore.value = response.data.pagination?.hasMore || false
+      pagination.value.total = response.data.pagination?.total || historyList.value.length
     }
   } catch (error) {
     console.error('Failed to load history:', error)
@@ -449,9 +449,9 @@ async function viewDetails(requestId) {
   selectedRequest.value = null
 
   try {
-    const response = await axios.get(`/admin/request-history/${requestId}`)
-    if (response.data.success) {
-      selectedRequest.value = response.data.data.request
+    const response = await apiClient.get(`/admin/request-history/${requestId}`)
+    if (response.success) {
+      selectedRequest.value = response.data.request
     }
   } catch (error) {
     console.error('Failed to load request details:', error)
