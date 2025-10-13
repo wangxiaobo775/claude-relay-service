@@ -450,11 +450,21 @@ async function viewDetails(requestId) {
 
   try {
     const response = await apiClient.get(`/admin/request-history/${requestId}`)
+    console.log('Details response:', response) // 调试日志
     if (response.success) {
+      console.log('Details data:', response.data) // 调试日志
       selectedRequest.value = response.data
+    } else {
+      console.error('Response not successful:', response)
+      // 关闭模态框,显示错误
+      alert('无法加载请求详情')
+      closeDetails()
     }
   } catch (error) {
     console.error('Failed to load request details:', error)
+    // 关闭模态框,显示错误
+    alert('加载请求详情失败: ' + (error.message || '未知错误'))
+    closeDetails()
   }
 }
 
