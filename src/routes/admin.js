@@ -10,6 +10,7 @@ const openaiAccountService = require('../services/openaiAccountService')
 const openaiResponsesAccountService = require('../services/openaiResponsesAccountService')
 const azureOpenaiAccountService = require('../services/azureOpenaiAccountService')
 const accountGroupService = require('../services/accountGroupService')
+const requestHistoryService = require('../services/requestHistoryService')
 const redis = require('../models/redis')
 const { authenticateAdmin } = require('../middleware/auth')
 const logger = require('../utils/logger')
@@ -9079,6 +9080,181 @@ router.post('/droid-accounts/:id/refresh-token', authenticateAdmin, async (req, 
   } catch (error) {
     logger.error(`Failed to refresh Droid account token ${req.params.id}:`, error)
     return res.status(500).json({ error: 'Failed to refresh token', message: error.message })
+  }
+})
+
+// 📊 请求历史管理（管理员专用）
+
+// 获取所有请求历史（支持筛选）
+router.get('/request-history', authenticateAdmin, async (req, res) => {
+  try {
+    const { apiKeyId, model, status, date, limit = 100, offset = 0 } = req.query
+
+    const options = {
+      apiKeyId,
+      model,
+      status,
+      date,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    }
+
+    const history = await requestHistoryService.getRequestHistory(options)
+
+    res.json({
+      success: true,
+      data: {
+        history,
+        pagination: {
+          limit: parseInt(limit),
+          offset: parseInt(offset),
+          hasMore: history.length === parseInt(limit)
+        },
+        filters: { apiKeyId, model, status, date }
+      }
+    })
+  } catch (error) {
+    logger.error('❌ Admin request history error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get request history',
+      message: error.message
+    })
+  }
+})
+
+// 获取单个请求详情（管理员可查看所有）
+router.get('/request-history/:requestId', authenticateAdmin, async (req, res) => {
+  try {
+    const { requestId } = req.params
+    const requestDetails = await requestHistoryService.getRequestDetails(requestId)
+
+    if (!requestDetails) {
+      return res.status(404).json({
+        success: false,
+        error: 'Request not found',
+        message: 'The specified request ID was not found'
+      })
+    }
+
+    res.json({
+      success: true,
+      data: requestDetails
+    })
+  } catch (error) {
+    logger.error('❌ Admin request details error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get request details',
+      message: error.message
+    })
+  }
+})
+
+// 获取请求统计（管理员视图）
+router.get('/request-stats', authenticateAdmin, async (req, res) => {
+  try {
+    const { date } = req.query
+    const stats = await requestHistoryService.getRequestStats(date)
+
+    res.json({
+      success: true,
+      data: {
+        stats,
+        date: date || new Date().toISOString().split('T')[0]
+      }
+    })
+  } catch (error) {
+    logger.error('❌ Admin request stats error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get request statistics',
+      message: error.message
+    })
+  }
+})
+
+// 删除请求记录
+router.delete('/request-history/:requestId', authenticateAdmin, async (req, res) => {
+  try {
+    const { requestId } = req.params
+    const deleted = await requestHistoryService.deleteRequest(requestId)
+
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        error: 'Request not found',
+        message: 'The specified request ID was not found'
+      })
+    }
+
+    res.json({
+      success: true,
+      message: 'Request deleted successfully'
+    })
+  } catch (error) {
+    logger.error('❌ Admin delete request error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete request',
+      message: error.message
+    })
+  }
+})
+
+// 批量清理历史记录
+router.post('/request-history/cleanup', authenticateAdmin, async (req, res) => {
+  try {
+    const { beforeDate } = req.body
+
+    if (!beforeDate) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing beforeDate parameter'
+      })
+    }
+
+    const result = await requestHistoryService.cleanupHistory(beforeDate)
+
+    res.json({
+      success: true,
+      message: 'History cleanup completed',
+      data: result
+    })
+  } catch (error) {
+    logger.error('❌ Admin cleanup history error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to cleanup history',
+      message: error.message
+    })
+  }
+})
+
+// 请求历史配置管理
+router.put('/request-history/config', authenticateAdmin, async (req, res) => {
+  try {
+    const { enableLogging, maxRequestBodySize, maxResponseBodySize } = req.body
+
+    if (enableLogging !== undefined) {
+      requestHistoryService.setHistoryLogging(enableLogging)
+    }
+
+    if (maxRequestBodySize !== undefined || maxResponseBodySize !== undefined) {
+      requestHistoryService.setMaxSizes(maxRequestBodySize, maxResponseBodySize)
+    }
+
+    res.json({
+      success: true,
+      message: 'Request history configuration updated'
+    })
+  } catch (error) {
+    logger.error('❌ Admin config update error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update configuration',
+      message: error.message
+    })
   }
 })
 

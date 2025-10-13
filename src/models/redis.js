@@ -1542,10 +1542,308 @@ class RedisClient {
     return await this.client.del(key)
   }
 
+  // 📝 请求历史记录管理
+  async saveRequestHistory(requestData) {
+    try {
+      const requestId = requestData.requestId;
+      const date = new Date().toISOString().split('T')[0];
+      
+      // 存储完整的请求记录
+      const historyKey = `request_history:${requestId}`;
+      const serializedData = {};
+      
+      // 序列化复杂对象
+      for (const [key, value] of Object.entries(requestData)) {
+        if (typeof value === 'object' && value !== null) {
+          serializedData[key] = JSON.stringify(value);
+        } else {
+          serializedData[key] = value || '';
+        }
+      }
+      
+      await this.client.hset(historyKey, serializedData);
+      await this.client.expire(historyKey, 86400 * 30); // 30天过期
+      
+      // 创建索引
+      const pipeline = this.client.pipeline();
+      
+      // 按API Key索引
+      if (requestData.apiKeyId) {
+        const apiKeyIndexKey = `request_index:api_key:${requestData.apiKeyId}:${date}`;
+        pipeline.lpush(apiKeyIndexKey, requestId);
+        pipeline.expire(apiKeyIndexKey, 86400 * 30);
+      }
+      
+      // 按模型索引
+      if (requestData.model) {
+        const modelIndexKey = `request_index:model:${requestData.model}:${date}`;
+        pipeline.lpush(modelIndexKey, requestId);
+        pipeline.expire(modelIndexKey, 86400 * 30);
+      }
+      
+      // 按状态索引
+      if (requestData.status) {
+        const statusIndexKey = `request_index:status:${requestData.status}:${date}`;
+        pipeline.lpush(statusIndexKey, requestId);
+        pipeline.expire(statusIndexKey, 86400 * 30);
+      }
+      
+      // 全局日期索引
+      const globalIndexKey = `request_index:date:${date}`;
+      pipeline.lpush(globalIndexKey, requestId);
+      pipeline.expire(globalIndexKey, 86400 * 30);
+      
+      await pipeline.exec();
+      
+      logger.debug(`📝 Request history saved: ${requestId}`);
+      return true;
+    } catch (error) {
+      logger.error('❌ Failed to save request history:', error);
+      return false;
+    }
+  }
+
+  async getRequestHistory(requestId) {
+    try {
+      const historyKey = `request_history:${requestId}`;
+      const data = await this.client.hgetall(historyKey);
+      
+      if (!data || Object.keys(data).length === 0) {
+        return null;
+      }
+      
+      // 反序列化对象字段
+      const deserializedData = {};
+      for (const [key, value] of Object.entries(data)) {
+        if (key === 'requestBody' || key === 'responseBody' || key === 'headers') {
+          try {
+            deserializedData[key] = JSON.parse(value);
+          } catch (error) {
+            deserializedData[key] = value;
+          }
+        } else {
+          deserializedData[key] = value;
+        }
+      }
+      
+      return deserializedData;
+    } catch (error) {
+      logger.error('❌ Failed to get request history:', error);
+      return null;
+    }
+  }
+
+  async getRequestHistoryList(options = {}) {
+    try {
+      const {
+        apiKeyId,
+        model,
+        status,
+        date,
+        limit = 50,
+        offset = 0
+      } = options;
+      
+      let indexKey;
+      
+      // 选择索引键
+      if (apiKeyId && date) {
+        indexKey = `request_index:api_key:${apiKeyId}:${date}`;
+      } else if (model && date) {
+        indexKey = `request_index:model:${model}:${date}`;
+      } else if (status && date) {
+        indexKey = `request_index:status:${status}:${date}`;
+      } else if (date) {
+        indexKey = `request_index:date:${date}`;
+      } else {
+        // 如果没有指定日期，获取今日记录
+        const today = new Date().toISOString().split('T')[0];
+        indexKey = `request_index:date:${today}`;
+      }
+      
+      // 获取请求ID列表
+      const requestIds = await this.client.lrange(indexKey, offset, offset + limit - 1);
+      
+      if (requestIds.length === 0) {
+        return [];
+      }
+      
+      // 批量获取请求详情
+      const pipeline = this.client.pipeline();
+      requestIds.forEach(id => {
+        pipeline.hgetall(`request_history:${id}`);
+      });
+      
+      const results = await pipeline.exec();
+      const histories = [];
+      
+      for (let i = 0; i < results.length; i++) {
+        const [error, data] = results[i];
+        if (!error && data && Object.keys(data).length > 0) {
+          // 反序列化基本字段，但不完全反序列化大对象（节省内存）
+          const basicData = {
+            requestId: data.requestId,
+            timestamp: data.timestamp,
+            apiKeyId: data.apiKeyId,
+            apiKeyName: data.apiKeyName,
+            model: data.model,
+            status: data.status,
+            duration: data.duration,
+            inputTokens: parseInt(data.inputTokens) || 0,
+            outputTokens: parseInt(data.outputTokens) || 0,
+            totalTokens: parseInt(data.totalTokens) || 0,
+            error: data.error
+          };
+          histories.push(basicData);
+        }
+      }
+      
+      return histories;
+    } catch (error) {
+      logger.error('❌ Failed to get request history list:', error);
+      return [];
+    }
+  }
+
+  async deleteRequestHistory(requestId) {
+    try {
+      const historyKey = `request_history:${requestId}`;
+      
+      // 获取记录以便从索引中删除
+      const data = await this.client.hgetall(historyKey);
+      if (data && Object.keys(data).length > 0) {
+        const date = data.timestamp ? data.timestamp.split('T')[0] : new Date().toISOString().split('T')[0];
+        
+        const pipeline = this.client.pipeline();
+        
+        // 从各个索引中删除
+        if (data.apiKeyId) {
+          pipeline.lrem(`request_index:api_key:${data.apiKeyId}:${date}`, 1, requestId);
+        }
+        if (data.model) {
+          pipeline.lrem(`request_index:model:${data.model}:${date}`, 1, requestId);
+        }
+        if (data.status) {
+          pipeline.lrem(`request_index:status:${data.status}:${date}`, 1, requestId);
+        }
+        pipeline.lrem(`request_index:date:${date}`, 1, requestId);
+        
+        // 删除主记录
+        pipeline.del(historyKey);
+        
+        await pipeline.exec();
+      }
+      
+      return true;
+    } catch (error) {
+      logger.error('❌ Failed to delete request history:', error);
+      return false;
+    }
+  }
+
+  async getRequestHistoryStats(date = null) {
+    try {
+      const targetDate = date || new Date().toISOString().split('T')[0];
+      const indexKey = `request_index:date:${targetDate}`;
+      
+      const requestIds = await this.client.lrange(indexKey, 0, -1);
+      
+      if (requestIds.length === 0) {
+        return {
+          totalRequests: 0,
+          successRequests: 0,
+          failedRequests: 0,
+          totalTokens: 0,
+          avgDuration: 0,
+          modelStats: {},
+          statusStats: {}
+        };
+      }
+      
+      // 批量获取所有记录
+      const pipeline = this.client.pipeline();
+      requestIds.forEach(id => {
+        pipeline.hgetall(`request_history:${id}`);
+      });
+      
+      const results = await pipeline.exec();
+      
+      let totalRequests = 0;
+      let successRequests = 0;
+      let failedRequests = 0;
+      let totalTokens = 0;
+      let totalDuration = 0;
+      const modelStats = {};
+      const statusStats = {};
+      
+      for (const [error, data] of results) {
+        if (!error && data && Object.keys(data).length > 0) {
+          totalRequests++;
+          
+          const status = data.status || 'unknown';
+          const model = data.model || 'unknown';
+          const duration = parseInt(data.duration) || 0;
+          const tokens = parseInt(data.totalTokens) || 0;
+          
+          if (status === 'success') {
+            successRequests++;
+          } else {
+            failedRequests++;
+          }
+          
+          totalTokens += tokens;
+          totalDuration += duration;
+          
+          // 模型统计
+          if (!modelStats[model]) {
+            modelStats[model] = { count: 0, tokens: 0 };
+          }
+          modelStats[model].count++;
+          modelStats[model].tokens += tokens;
+          
+          // 状态统计
+          if (!statusStats[status]) {
+            statusStats[status] = 0;
+          }
+          statusStats[status]++;
+        }
+      }
+      
+      return {
+        totalRequests,
+        successRequests,
+        failedRequests,
+        totalTokens,
+        avgDuration: totalRequests > 0 ? Math.round(totalDuration / totalRequests) : 0,
+        modelStats,
+        statusStats
+      };
+    } catch (error) {
+      logger.error('❌ Failed to get request history stats:', error);
+      return {
+        totalRequests: 0,
+        successRequests: 0,
+        failedRequests: 0,
+        totalTokens: 0,
+        avgDuration: 0,
+        modelStats: {},
+        statusStats: {}
+      };
+    }
+  }
+
   // 🧹 清理过期数据
   async cleanup() {
     try {
-      const patterns = ['usage:daily:*', 'ratelimit:*', 'session:*', 'sticky_session:*', 'oauth:*']
+      const patterns = [
+        'usage:daily:*',
+        'ratelimit:*',
+        'session:*',
+        'sticky_session:*',
+        'oauth:*',
+        'request_history:*',
+        'request_index:*'
+      ]
 
       for (const pattern of patterns) {
         const keys = await this.client.keys(pattern)
@@ -1557,6 +1855,8 @@ class RedisClient {
             // 没有设置过期时间的键
             if (key.startsWith('oauth:')) {
               pipeline.expire(key, 600) // OAuth会话设置10分钟过期
+            } else if (key.startsWith('request_history:') || key.startsWith('request_index:')) {
+              pipeline.expire(key, 86400 * 30) // 请求历史30天过期
             } else {
               pipeline.expire(key, 86400) // 其他设置1天过期
             }
