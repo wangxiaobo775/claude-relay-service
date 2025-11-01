@@ -1142,6 +1142,23 @@
                 </div>
               </div>
 
+              <!-- 并发控制字段 -->
+              <div>
+                <label class="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  最大并发任务数
+                </label>
+                <input
+                  v-model.number="form.maxConcurrentTasks"
+                  class="form-input w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                  min="0"
+                  placeholder="0 表示不限制"
+                  type="number"
+                />
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  限制该账户的并发请求数量，0 表示不限制
+                </p>
+              </div>
+
               <div>
                 <label class="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300"
                   >模型限制 (可选)</label
@@ -1277,6 +1294,15 @@
                       + Sonnet 4
                     </button>
                     <button
+                      class="rounded-lg bg-indigo-100 px-3 py-1 text-xs text-indigo-700 transition-colors hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 dark:hover:bg-indigo-900/50"
+                      type="button"
+                      @click="
+                        addPresetMapping('claude-sonnet-4-5-20250929', 'claude-sonnet-4-5-20250929')
+                      "
+                    >
+                      + Sonnet 4.5
+                    </button>
+                    <button
                       class="rounded-lg bg-purple-100 px-3 py-1 text-xs text-purple-700 transition-colors hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:hover:bg-purple-900/50"
                       type="button"
                       @click="
@@ -1295,7 +1321,44 @@
                       + Haiku 3.5
                     </button>
                     <button
+                      class="rounded-lg bg-emerald-100 px-3 py-1 text-xs text-emerald-700 transition-colors hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:hover:bg-emerald-900/50"
+                      type="button"
+                      @click="
+                        addPresetMapping('claude-haiku-4-5-20251001', 'claude-haiku-4-5-20251001')
+                      "
+                    >
+                      + Haiku 4.5
+                    </button>
+                    <button
+                      class="rounded-lg bg-cyan-100 px-3 py-1 text-xs text-cyan-700 transition-colors hover:bg-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-400 dark:hover:bg-cyan-900/50"
+                      type="button"
+                      @click="addPresetMapping('deepseek-chat', 'deepseek-chat')"
+                    >
+                      + DeepSeek
+                    </button>
+                    <button
                       class="rounded-lg bg-orange-100 px-3 py-1 text-xs text-orange-700 transition-colors hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:hover:bg-orange-900/50"
+                      type="button"
+                      @click="addPresetMapping('Qwen', 'Qwen')"
+                    >
+                      + Qwen
+                    </button>
+                    <button
+                      class="rounded-lg bg-pink-100 px-3 py-1 text-xs text-pink-700 transition-colors hover:bg-pink-200 dark:bg-pink-900/30 dark:text-pink-400 dark:hover:bg-pink-900/50"
+                      type="button"
+                      @click="addPresetMapping('Kimi', 'Kimi')"
+                    >
+                      + Kimi
+                    </button>
+                    <button
+                      class="rounded-lg bg-teal-100 px-3 py-1 text-xs text-teal-700 transition-colors hover:bg-teal-200 dark:bg-teal-900/30 dark:text-teal-400 dark:hover:bg-teal-900/50"
+                      type="button"
+                      @click="addPresetMapping('GLM', 'GLM')"
+                    >
+                      + GLM
+                    </button>
+                    <button
+                      class="rounded-lg bg-amber-100 px-3 py-1 text-xs text-amber-700 transition-colors hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50"
                       type="button"
                       @click="
                         addPresetMapping('claude-opus-4-1-20250805', 'claude-sonnet-4-20250514')
@@ -2494,6 +2557,23 @@
               </div>
             </div>
 
+            <!-- 并发控制字段（编辑模式）-->
+            <div>
+              <label class="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                最大并发任务数
+              </label>
+              <input
+                v-model.number="form.maxConcurrentTasks"
+                class="form-input w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                min="0"
+                placeholder="0 表示不限制"
+                type="number"
+              />
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                限制该账户的并发请求数量，0 表示不限制
+              </p>
+            </div>
+
             <div>
               <label class="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300"
                 >模型限制 (可选)</label
@@ -2629,6 +2709,15 @@
                     + Sonnet 4
                   </button>
                   <button
+                    class="rounded-lg bg-indigo-100 px-3 py-1 text-xs text-indigo-700 transition-colors hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 dark:hover:bg-indigo-900/50"
+                    type="button"
+                    @click="
+                      addPresetMapping('claude-sonnet-4-5-20250929', 'claude-sonnet-4-5-20250929')
+                    "
+                  >
+                    + Sonnet 4.5
+                  </button>
+                  <button
                     class="rounded-lg bg-purple-100 px-3 py-1 text-xs text-purple-700 transition-colors hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:hover:bg-purple-900/50"
                     type="button"
                     @click="
@@ -2647,7 +2736,44 @@
                     + Haiku 3.5
                   </button>
                   <button
+                    class="rounded-lg bg-emerald-100 px-3 py-1 text-xs text-emerald-700 transition-colors hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:hover:bg-emerald-900/50"
+                    type="button"
+                    @click="
+                      addPresetMapping('claude-haiku-4-5-20251001', 'claude-haiku-4-5-20251001')
+                    "
+                  >
+                    + Haiku 4.5
+                  </button>
+                  <button
+                    class="rounded-lg bg-cyan-100 px-3 py-1 text-xs text-cyan-700 transition-colors hover:bg-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-400 dark:hover:bg-cyan-900/50"
+                    type="button"
+                    @click="addPresetMapping('deepseek-chat', 'deepseek-chat')"
+                  >
+                    + DeepSeek
+                  </button>
+                  <button
                     class="rounded-lg bg-orange-100 px-3 py-1 text-xs text-orange-700 transition-colors hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:hover:bg-orange-900/50"
+                    type="button"
+                    @click="addPresetMapping('Qwen', 'Qwen')"
+                  >
+                    + Qwen
+                  </button>
+                  <button
+                    class="rounded-lg bg-pink-100 px-3 py-1 text-xs text-pink-700 transition-colors hover:bg-pink-200 dark:bg-pink-900/30 dark:text-pink-400 dark:hover:bg-pink-900/50"
+                    type="button"
+                    @click="addPresetMapping('Kimi', 'Kimi')"
+                  >
+                    + Kimi
+                  </button>
+                  <button
+                    class="rounded-lg bg-teal-100 px-3 py-1 text-xs text-teal-700 transition-colors hover:bg-teal-200 dark:bg-teal-900/30 dark:text-teal-400 dark:hover:bg-teal-900/50"
+                    type="button"
+                    @click="addPresetMapping('GLM', 'GLM')"
+                  >
+                    + GLM
+                  </button>
+                  <button
+                    class="rounded-lg bg-amber-100 px-3 py-1 text-xs text-amber-700 transition-colors hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50"
                     type="button"
                     @click="
                       addPresetMapping('claude-opus-4-1-20250805', 'claude-sonnet-4-20250514')
@@ -2780,6 +2906,23 @@
                   type="time"
                 />
               </div>
+            </div>
+
+            <!-- 并发控制字段 -->
+            <div>
+              <label class="mb-3 block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                最大并发任务数
+              </label>
+              <input
+                v-model.number="form.maxConcurrentTasks"
+                class="form-input w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                min="0"
+                placeholder="0 表示不限制"
+                type="number"
+              />
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                限制该账户的并发请求数量，0 表示不限制
+              </p>
             </div>
           </div>
 
@@ -3450,6 +3593,8 @@ const form = ref({
   dailyQuota: props.account?.dailyQuota || 0,
   dailyUsage: props.account?.dailyUsage || 0,
   quotaResetTime: props.account?.quotaResetTime || '00:00',
+  // 并发控制字段
+  maxConcurrentTasks: props.account?.maxConcurrentTasks || 0,
   // Bedrock 特定字段
   accessKeyId: props.account?.accessKeyId || '',
   secretAccessKey: props.account?.secretAccessKey || '',
@@ -3494,9 +3639,13 @@ const commonModels = [
   { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4', color: 'blue' },
   { value: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5', color: 'indigo' },
   { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku', color: 'green' },
+  { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', color: 'emerald' },
   { value: 'claude-opus-4-20250514', label: 'Claude Opus 4', color: 'purple' },
   { value: 'claude-opus-4-1-20250805', label: 'Claude Opus 4.1', color: 'purple' },
-  { value: 'deepseek-chat', label: 'DeepSeek Chat', color: 'cyan' }
+  { value: 'deepseek-chat', label: 'DeepSeek Chat', color: 'cyan' },
+  { value: 'Qwen', label: 'Qwen', color: 'orange' },
+  { value: 'Kimi', label: 'Kimi', color: 'pink' },
+  { value: 'GLM', label: 'GLM', color: 'teal' }
 ]
 
 // 模型映射表数据
@@ -3911,7 +4060,35 @@ const handleOAuthSuccess = async (tokenInfo) => {
 
     if (currentPlatform === 'claude') {
       // Claude使用claudeAiOauth字段
-      data.claudeAiOauth = tokenInfo.claudeAiOauth || tokenInfo
+      const claudeOauthPayload = tokenInfo.claudeAiOauth || tokenInfo
+      data.claudeAiOauth = claudeOauthPayload
+      if (claudeOauthPayload) {
+        const extInfoPayload = {}
+        const extSource = claudeOauthPayload.extInfo
+        if (extSource && typeof extSource === 'object') {
+          if (extSource.org_uuid) {
+            extInfoPayload.org_uuid = extSource.org_uuid
+          }
+          if (extSource.account_uuid) {
+            extInfoPayload.account_uuid = extSource.account_uuid
+          }
+        }
+
+        if (!extSource) {
+          const orgUuid = claudeOauthPayload.organization?.uuid
+          const accountUuid = claudeOauthPayload.account?.uuid
+          if (orgUuid) {
+            extInfoPayload.org_uuid = orgUuid
+          }
+          if (accountUuid) {
+            extInfoPayload.account_uuid = accountUuid
+          }
+        }
+
+        if (Object.keys(extInfoPayload).length > 0) {
+          data.extInfo = extInfoPayload
+        }
+      }
       data.priority = form.value.priority || 50
       data.autoStopOnWarning = form.value.autoStopOnWarning || false
       data.useUnifiedUserAgent = form.value.useUnifiedUserAgent || false
@@ -4312,6 +4489,8 @@ const createAccount = async () => {
       // 额度管理字段
       data.dailyQuota = form.value.dailyQuota || 0
       data.quotaResetTime = form.value.quotaResetTime || '00:00'
+      // 并发控制字段
+      data.maxConcurrentTasks = form.value.maxConcurrentTasks || 0
     } else if (form.value.platform === 'openai-responses') {
       // OpenAI-Responses 账户特定数据
       data.baseApi = form.value.baseApi
@@ -4614,6 +4793,8 @@ const updateAccount = async () => {
       // 额度管理字段
       data.dailyQuota = form.value.dailyQuota || 0
       data.quotaResetTime = form.value.quotaResetTime || '00:00'
+      // 并发控制字段
+      data.maxConcurrentTasks = form.value.maxConcurrentTasks || 0
     }
 
     // OpenAI-Responses 特定更新
@@ -5204,7 +5385,9 @@ watch(
         // 额度管理字段
         dailyQuota: newAccount.dailyQuota || 0,
         dailyUsage: newAccount.dailyUsage || 0,
-        quotaResetTime: newAccount.quotaResetTime || '00:00'
+        quotaResetTime: newAccount.quotaResetTime || '00:00',
+        // 并发控制字段
+        maxConcurrentTasks: newAccount.maxConcurrentTasks || 0
       }
 
       // 如果是Claude Console账户，加载实时使用情况
