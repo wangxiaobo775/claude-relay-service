@@ -1,9 +1,10 @@
 name: 同步模型价格数据
 
 on:
-  schedule:
-    - cron: '*/10 * * * *'
-  workflow_dispatch: {}
+  # 已禁用定时任务,避免频繁失败通知
+  # schedule:
+  #   - cron: '*/10 * * * *'
+  workflow_dispatch: {}  # 保留手动触发功能
 
 jobs:
   sync-pricing:
